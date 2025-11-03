@@ -1,9 +1,7 @@
 package com.frauddetector.orchestrator.controller;
 
-import com.frauddetector.orchestrator.dto.AnalysisRequestDTO;
-import com.frauddetector.orchestrator.dto.AnalysisResponseDTO;
-import com.frauddetector.orchestrator.dto.TransactionDTO;
-import com.frauddetector.orchestrator.dto.UserProfileDTO;
+import com.frauddetector.orchestrator.dto.*;
+import com.frauddetector.orchestrator.service.KafkaProducerService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -19,10 +17,15 @@ public class FraudController {
 
     private final WebClient profileWebClient;
     private final WebClient inferenceWebClient;
+    private final KafkaProducerService kafkaProducer;
 
-    public FraudController(WebClient.Builder webClientBuilder) {
+    public FraudController(
+            WebClient.Builder webClientBuilder,
+            KafkaProducerService kafkaProducer
+    ) {
         this.profileWebClient = webClientBuilder.baseUrl("http://profile-service:8082").build();
         this.inferenceWebClient = webClientBuilder.baseUrl("http://inference-service:8083").build();
+        this.kafkaProducer = kafkaProducer;
     }
 
     @PostMapping
@@ -67,6 +70,14 @@ public class FraudController {
                             "status", "ANALYSIS_COMPLETE",
                             "riskAnalysis", analysisResponse
                         );
+                    })
+                    // Envia o evento de auditoria de forma assíncrona
+                    .doOnSuccess(responseMap -> {
+                        AuditLogEvent event = new AuditLogEvent(
+                                (String) responseMap.get("status"),
+                                (AnalysisResponseDTO) responseMap.get("riskAnalysis")
+                        );
+                        kafkaProducer.sendAuditEvent(event);
                     });
             });
     }

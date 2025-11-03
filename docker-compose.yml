@@ -15,6 +15,15 @@ services:
     container_name: orchestrator
     ports:
       - "8081:8081"
+    environment:
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+    depends_on:
+      profile-service:
+        condition: service_healthy
+      inference-service:
+        condition: service_healthy
+      kafka:
+        condition: service_started
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8081/actuator/health" ]
       interval: 30s
@@ -27,9 +36,9 @@ services:
     ports:
       - "8082:8082"
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://db-profile:5432/${DB_NAME}
-      - SPRING_DATASOURCE_USERNAME=${DB_USER}
-      - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD}
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://db-profile:5432/${DB_PROFILE_NAME}
+      - SPRING_DATASOURCE_USERNAME=${DB_PROFILE_USER}
+      - SPRING_DATASOURCE_PASSWORD=${DB_PROFILE_PASSWORD}
       - SPRING_DATASOURCE_DRIVER_CLASS_NAME=org.postgresql.Driver
     depends_on:
       db-profile:
@@ -51,22 +60,82 @@ services:
       timeout: 10s
       retries: 3
 
+  audit-service:
+    build: ./audit-service
+    container_name: audit-service
+    ports:
+      - "8084:8084"
+    environment:
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://db-audit:5432/${DB_AUDIT_NAME}
+      - SPRING_DATASOURCE_USERNAME=${DB_AUDIT_USER}
+      - SPRING_DATASOURCE_PASSWORD=${DB_AUDIT_PASSWORD}
+      - SPRING_DATASOURCE_DRIVER_CLASS_NAME=org.postgresql.Driver
+    depends_on:
+      db-audit:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8084/actuator/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  kafka:
+    image: 'bitnamilegacy/kafka:4.0.0-debian-12-r10'
+    container_name: kafka
+    ports:
+      - '9092:9092' # Porta para os serviços de dentro do Docker
+      - '9094:9094' # Porta para comunicação externa
+    environment:
+      - KAFKA_CFG_NODE_ID=0
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true # Permite criar tópicos automaticamente
+    volumes:
+      - kafka-data:/bitnami/kafka
+
   db-profile:
     image: postgres:15-alpine
     container_name: db-profile
     environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_PROFILE_USER}
+      POSTGRES_PASSWORD: ${DB_PROFILE_PASSWORD}
+      POSTGRES_DB: ${DB_PROFILE_NAME}
     ports:
       - "5432:5432"
     volumes:
       - db-profile-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_PROFILE_USER} -d ${DB_PROFILE_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  db-audit:
+    image: postgres:15-alpine
+    container_name: db-audit
+    environment:
+      POSTGRES_USER: ${DB_AUDIT_USER}
+      POSTGRES_PASSWORD: ${DB_AUDIT_PASSWORD}
+      POSTGRES_DB: ${DB_AUDIT_NAME}
+    ports:
+      - "5433:5432"
+    volumes:
+      - db-audit-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_AUDIT_USER} -d ${DB_AUDIT_NAME}" ]
       interval: 10s
       timeout: 5s
       retries: 5
 
 volumes:
   db-profile-data:
+  db-audit-data:
+  kafka-data:
