@@ -10,7 +10,7 @@ O sistema recebe os dados da transação, enriquece-os com informações do perf
 
 ## Tecnologias Utilizadas
 
-* **Linguagens:** Java 21, Python 3.9
+* **Linguagens:** Java 21, Python 3.12
 * **Frameworks/Bibliotecas:**
     * **Java:** Spring Boot 3.2.5, Spring Cloud Gateway, Spring WebFlux, Spring Data JPA, Hibernate, Jackson, Maven.
     * **Python:** FastAPI, Uvicorn, Pydantic, XGBoost, NumPy.
@@ -37,13 +37,13 @@ graph TD
         end
 
         subgraph "Caminho Assíncrono"
-            F{"Fila de Mensagens <br> (RabbitMQ / Kafka)"}
+            F{"Fila de Mensagens <br> (Apache Kafka)"}
             G["Serviço de Auditoria <br> (Java / Spring Boot)"]
         end
 
         subgraph "Persistência"
-            H[("DB Perfil <br> PostgreSQL / Redis")]
-            I[("DB Auditoria <br> PostgreSQL / MongoDB")]
+            H[("DB Perfil <br> PostgreSQL")]
+            I[("DB Auditoria <br> PostgreSQL")]
         end
 
         A -- "1. Requisição de Análise (JSON/HTTP)" --> B
@@ -85,6 +85,31 @@ O projeto está organizado em um monorepo, onde cada microsserviço reside em se
 │   ├── mvnw
 │   ├── mvnw.cmd
 │   └── pom.xml
+│
+├── audit-service
+│  ├── .mvn
+│  ├── src
+│  │   └── main
+│  │       ├── java
+│  │       │   └── com
+│  │       │       └── frauddetector
+│  │       │           └── auditservice
+│  │       │               ├── dto
+│  │       │               │   ├── AnalysisResponseDTO.java
+│  │       │               │   └── AuditLogEvent.java
+│  │       │               ├── entity
+│  │       │               │   └── AuditLog.java
+│  │       │               ├── repository
+│  │       │               │   └── AuditLogRepository.java
+│  │       │               ├── service
+│  │       │               │   └── AuditConsumer.java
+│  │       │               └── AuditApplication.java
+│  │       └── resources
+│  │           └── application.properties
+│  ├── Dockerfile
+│  ├── mvnw
+│  ├── mvnw.cmd
+│  └── pom.xml
 │
 ├── inference-service       # Módulo do Serviço de Inferência (Python/FastAPI)
 │   ├── app
@@ -156,14 +181,13 @@ O projeto está organizado em um monorepo, onde cada microsserviço reside em se
 
 ### 2. `orchestrator`
 
-* **Tecnologias:** Java 21, Spring Boot, Spring WebFlux (para `WebClient`).
-* **Responsabilidade:** É o orquestrador do fluxo principal de análise de fraude. Ele não possui lógica de negócio complexa, mas coordena as chamadas entre os outros serviços:
-    1.  Recebe a requisição de análise do `api-gateway`.
-    2.  Chama o `profile-service` para obter dados históricos do usuário (enriquecimento).
-    3.  Chama o `inference-service` com os dados combinados (transação + perfil).
-    4.  Recebe o score de risco e a ação recomendada.
-    5.  Formata e retorna a resposta final.
-* **Comunicação:** Utiliza o `WebClient` para fazer chamadas HTTP reativas (não bloqueantes) aos outros serviços.
+* **Tecnologias:** Java 21, Spring Boot, Spring WebFlux, Spring Kafka.
+* **Responsabilidade:** É o cérebro do fluxo de análise.
+    1.  Recebe a requisição do `api-gateway`.
+    2.  Chama o `profile-service` (síncrono) para enriquecer os dados.
+    3.  Chama o `inference-service` (síncrono) com os dados enriquecidos.
+    4.  Retorna a decisão final (síncrona) para o `api-gateway`.
+    5.  Publica um evento de auditoria (assíncrono) no tópico do Kafka.
 
 ### 3. `profile-service`
 
@@ -174,50 +198,67 @@ O projeto está organizado em um monorepo, onde cada microsserviço reside em se
 
 ### 4. `inference-service`
 
-* **Tecnologias:** `Python 3.9`, `FastAPI`, `Pydantic`, `XGBoost` (simulado).
+* **Tecnologias:** `Python 3.12`, `FastAPI`, `Pydantic`, `XGBoost` (simulado).
 * **Responsabilidade:** É o cérebro de decisão do sistema. Recebe os dados enriquecidos e aplica a lógica de Machine Learning.
     * **API:** Expõe um endpoint REST (`POST /predict`) que recebe os dados da análise.
     * **Modelo ML (Simulado):** Atualmente, simula a predição de um modelo XGBoost por regras, retornando uma probabilidade de fraude (0.0 a 1.0).
     * **Lógica de Decisão:** Implementa a teoria do `Bayes Minimum Risk` (baseada no artigo *[Cost Sensitive Credit Card Fraud Detection Using Bayes Minimum Risk](https://albahnsen.github.io/files/Cost%20Sensitive%20Credit%20Card%20Fraud%20Detection%20using%20Bayes%20Minimum%20Risk%20-%20Publish.pdf)*) para calcular um limite de decisão dinâmico, que leva em conta o valor da transação.  
       Com base na comparação entre a probabilidade e o limite, recomenda uma ação (`APPROVE`, `REVIEW`, `DECLINE`).
 
-### 5. `db-profile` (Banco de Dados)
+### 5. `audit-service`
 
-* **Tecnologias:** `PostgreSQL 15`.
-* **Responsabilidade:** Armazena os dados dos perfis de usuário utilizados pelo `profile-service`.
-* **Gerenciamento:** É executado como um contêiner separado e gerenciado pelo Docker Compose. Seus dados são persistidos em um volume Docker (`db-profile-data`) para não serem perdidos ao reiniciar os contêineres.
+* **Tecnologias:** Java 21, Spring Boot, Spring Kafka, Spring Data JPA.
+* **Responsabilidade:** Operar de forma assíncrona.
+    * Escuta o tópico `fraud_analysis_events` do Kafka.
+    * Consome as mensagens de auditoria (enviadas pelo `orchestrator`).
+    * Salva cada análise de fraude em seu próprio banco de dados (`db-audit`) para persistência de longo prazo, rastreabilidade e conformidade.
+
+### 6. `db-profile` e `db-audit` (Bancos de Dados)
+* **Tecnologias:** PostgreSQL 15 (Imagens Docker).
+* **Responsabilidade:** Armazenam os dados dos serviços `profile` e `audit`, respectivamente. São executados em contêineres separados e persistem seus dados em volumes Docker.
+
+### 7. `kafka` (Mensageria)
+* **Tecnologias:** Bitnami Legacy Kafka (imagem Docker).
+* **Responsabilidade:** Atua como o *message broker* (fila de mensagens) que desacopla o fluxo síncrono do assíncrono. Garante que os eventos de auditoria sejam entregues de forma durável e resiliente, mesmo que o `audit-service` esteja temporariamente offline.
 
 ## Detalhamento do `docker-compose.yml`
 
 O arquivo `docker-compose.yml` na raiz do projeto orquestra a inicialização e a rede de todos os serviços.
 
 * **`services`**: Define cada contêiner que compõe a aplicação:
-    * **`api-gateway`, `orchestrator`, `profile-service`, `inference-service`**:
+    * **`api-gateway`, `audit-service`, `orchestrator`, `profile-service`, `inference-service`**:
         * `build: ./<nome-do-servico>`: Instrui o Docker Compose a construir a imagem Docker a partir do `Dockerfile` localizado no diretório especificado.
         * `container_name: <nome-do-servico>`: Define um nome fixo para o contêiner.
         * `ports: - "<porta_host>:<porta_container>"`: Mapeia uma porta do seu computador (host) para uma porta dentro do contêiner, permitindo acesso externo.
-        * `depends_on`: Define dependências entre os serviços, garantindo que certos contêineres sejam iniciados antes de outros. Aqui, por exemplo, o `profile-service` depende do `db-profile`.
-        * `environment` (ex: `profile-service`): Injeta variáveis de ambiente no contêiner. É usado aqui para passar as credenciais do banco de dados de forma segura, lidas do arquivo `.env`. O Spring Boot automaticamente lê variáveis como `SPRING_DATASOURCE_USERNAME` e as usa para configurar a aplicação.
+        * `depends_on`: Define dependências entre os serviços, garantindo que certos contêineres sejam iniciados antes de outros.
+        * `environment`: Injeta variáveis de ambiente no contêiner. É usado aqui para passar as credenciais do banco de dados de forma segura, lidas do arquivo `.env`. O Spring Boot automaticamente lê variáveis como `SPRING_DATASOURCE_USERNAME` e as usa para configurar a aplicação.
         * `healthcheck`: Define um comando (`curl` chamando um endpoint `/health` ou `/actuator/health`) que o Docker executa periodicamente para verificar se a aplicação dentro do contêiner está realmente funcionando. A condição `service_healthy` no `depends_on` usa o resultado deste `healthcheck`.
-    * **`db-profile`**:
+    * **`db-profile` / `db-audit`**:
         * `image: postgres:15-alpine`: Usa uma imagem oficial do PostgreSQL do Docker Hub.
         * `environment`: Define variáveis de ambiente essenciais para o PostgreSQL (usuário, senha, nome do banco), lendo os valores do arquivo `.env`.
-        * `volumes: - db-profile-data:/var/lib/postgresql/data`: Mapeia o diretório interno onde o PostgreSQL guarda seus dados para um volume nomeado (`db-profile-data`), garantindo a persistência dos dados.
+        * `volumes: - <nome-volume>:/var/lib/postgresql/data`: Mapeia o diretório interno onde o PostgreSQL guarda seus dados para um volume nomeado, garantindo a persistência dos dados.
         * `healthcheck`: Usa o comando `pg_isready` para verificar se o banco de dados está pronto para aceitar conexões.
-* **`volumes`**: Declara os volumes nomeados usados pelos serviços (neste caso, `db-profile-data`).
+* **`volumes`**: Declara os volumes nomeados usados pelos serviços.
+
+---
 
 ## Configuração do Ambiente e Segredos
 
-Para executar o projeto, é necessário configurar as variáveis de ambiente para as credenciais do banco de dados.  
+Para executar o projeto, é necessário configurar as variáveis de ambiente para as credenciais dos bancos de dados.  
 Para evitar expor senhas e outras informações sensíveis no controle de versão, utilizamos um arquivo `.env` que não é versionado:
 
 * **`.env` (Não versionado):** Arquivo na raiz do projeto onde você deve colocar as variáveis de ambiente reais. O Docker Compose lê este arquivo automaticamente. Crie-o a partir do exemplo abaixo.
 * **[`.env.example`](./.env.example) (Versionado):** Um arquivo de exemplo mostrando quais variáveis são esperadas no `.env`.
     ```env
-    # Credenciais do Banco de Dados do Serviço de Perfil
-    DB_USER=nome_de_usuario
-    DB_PASSWORD=senha_segura
-    DB_NAME=nome_do_banco
+    # Credenciais do banco de dados do serviço de perfil
+    DB_PROFILE_USER=
+    DB_PROFILE_PASSWORD=
+    DB_PROFILE_NAME=
+    
+    # Credenciais do banco de dados do serviço de auditoria
+    DB_AUDIT_USER=
+    DB_AUDIT_PASSWORD=
+    DB_AUDIT_NAME=
     ```
 
 ## Como Executar
@@ -233,7 +274,7 @@ Para evitar expor senhas e outras informações sensíveis no controle de versã
     ```
 
 3.  **Configure o ambiente:**
-Renomeie o arquivo `.env.example` para `.env`, depois edite-o para adicionar as credenciais do banco de dados.
+Renomeie o arquivo `.env.example` para `.env`, depois edite-o para adicionar as credenciais dos bancos de dados.
     ```bash
     mv .env.example .env
     ```
@@ -245,7 +286,8 @@ Este comando irá construir as imagens Docker e iniciar todos os contêineres.
      # Use 'docker compose up --build -d' para rodar em segundo plano
      ```
 
-5. **Verifique se os contêineres iniciaram corretamente:** Aguarde um pouco (especialmente para os serviços Java) e verifique o status.
+5. **Verifique se os contêineres iniciaram corretamente:**
+Aguarde um pouco (especialmente para os serviços Java) e verifique o status.
     ```bash
     docker compose ps
     ```

@@ -1,9 +1,9 @@
 package com.frauddetector.orchestrator.controller;
 
-import com.frauddetector.orchestrator.dto.AnalysisRequestDTO;
-import com.frauddetector.orchestrator.dto.AnalysisResponseDTO;
-import com.frauddetector.orchestrator.dto.TransactionDTO;
-import com.frauddetector.orchestrator.dto.UserProfileDTO;
+import com.frauddetector.orchestrator.dto.*;
+import com.frauddetector.orchestrator.service.KafkaProducerService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -16,18 +16,25 @@ import java.util.Map;
 @RestController
 @RequestMapping("/analyze")
 public class FraudController {
+    
+    private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
     private final WebClient profileWebClient;
     private final WebClient inferenceWebClient;
+    private final KafkaProducerService kafkaProducer;
 
-    public FraudController(WebClient.Builder webClientBuilder) {
+    public FraudController(
+            WebClient.Builder webClientBuilder,
+            KafkaProducerService kafkaProducer
+    ) {
         this.profileWebClient = webClientBuilder.baseUrl("http://profile-service:8082").build();
         this.inferenceWebClient = webClientBuilder.baseUrl("http://inference-service:8083").build();
+        this.kafkaProducer = kafkaProducer;
     }
 
     @PostMapping
     public Mono<Map<String, Object>> analyzeFraud(@RequestBody(required = false) TransactionDTO transaction) {
-        System.out.println(">>> Requisição recebida: " + transaction);
+        logger.info(">>> Requisição recebida: {}", transaction);
 
         // Chama o serviço de perfil
         return this.profileWebClient.get()
@@ -35,7 +42,7 @@ public class FraudController {
             .retrieve()
             .bodyToMono(UserProfileDTO.class)
             .flatMap(userProfile -> {
-                System.out.println(">>> Perfil recebido: " + userProfile);
+                logger.info(">>> Perfil recebido: {}", userProfile);
 
                 // Prepara o corpo da requisição para o serviço de inferência
                 AnalysisRequestDTO analysisRequest = new AnalysisRequestDTO(
@@ -53,20 +60,29 @@ public class FraudController {
                     .retrieve()
                     .bodyToMono(AnalysisResponseDTO.class)
                     .map(analysisResponse -> {
-                        System.out.println(">>> Inferência recebida: " + analysisResponse);
-                        System.out.print(">>> Resultado: ");
+                        logger.info(">>> Inferência recebida: {}", analysisResponse);
+                        String action;
                         switch (analysisResponse.recommendedAction()) {
-                            case "APPROVE" -> System.out.println("Transação aprovada.");
-                            case "DECLINE" -> System.out.println("Transação rejeitada.");
-                            case "REVIEW" -> System.out.println("Transação em revisão.");
-                            default -> System.out.println("Ação desconhecida.");
+                            case "APPROVE" -> action = "Transação aprovada.";
+                            case "DECLINE" -> action = "Transação rejeitada.";
+                            case "REVIEW" -> action = "Transação em revisão.";
+                            default -> action = "Ação desconhecida.";
                         }
+                        logger.info(">>> Resultado: {}", action);
 
                         // Monta e retorna a resposta final
                         return Map.of(
                             "status", "ANALYSIS_COMPLETE",
                             "riskAnalysis", analysisResponse
                         );
+                    })
+                    // Envia o evento de auditoria de forma assíncrona
+                    .doOnSuccess(responseMap -> {
+                        AuditLogEvent event = new AuditLogEvent(
+                                (String) responseMap.get("status"),
+                                (AnalysisResponseDTO) responseMap.get("riskAnalysis")
+                        );
+                        kafkaProducer.sendAuditEvent(event);
                     });
             });
     }
