@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
@@ -7,7 +8,7 @@ import numpy as np
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     get_model()
-    print(">>> Aplicação iniciada e pronta para receber requisições")
+    logging.info(">>> Aplicação iniciada e pronta para receber requisições")
     yield
 
 
@@ -19,7 +20,7 @@ def get_model():
     global model
     if model is None:
         # Sempre retorna uma probabilidade fixa ou baseada em regras simples
-        print(">>> Modelo de ML não encontrado. Carregando um simulador.")
+        logging.info(">>> Modelo de ML não encontrado. Carregando um simulador.")
         model = "SIMULATOR"
     return model
 
@@ -90,7 +91,7 @@ def get_cost_sensitive_action(probability_of_fraud: float, transaction_value: fl
     # Definimos um segundo limite mais agressivo para recusa direta
     decline_threshold = 0.90 # Limite fixo para transações de altíssimo risco
 
-    print(f">>> Valor da Transação: R${transaction_value:.2f}, Limite de Risco Mínimo: {threshold:.4f}")
+    logging.info(f">>> Valor da Transação: R${transaction_value:.2f}, Limite de Risco Mínimo: {threshold:.4f}")
 
     if probability_of_fraud > decline_threshold:
         return "DECLINE"
@@ -101,7 +102,7 @@ def get_cost_sensitive_action(probability_of_fraud: float, transaction_value: fl
 
 @app.post("/predict", response_model=AnalysisResponse)
 def predict_fraud(request: AnalysisRequest):
-    print(f">>> Análise de risco solicitada para: {request.model_dump(by_alias=True)}")
+    logging.info(f">>> Análise de risco solicitada para: {request.model_dump(by_alias=True)}")
 
     ml_model = get_model()
 
@@ -111,7 +112,7 @@ def predict_fraud(request: AnalysisRequest):
     # Usa a teoria do Bayes Minimum Risk para decidir a ação
     action = get_cost_sensitive_action(fraud_probability, request.value)
 
-    print(f">>> Score de Probabilidade: {fraud_probability:.4f}, Ação Recomendada: {action}")
+    logging.info(f">>> Score de Probabilidade: {fraud_probability:.4f}, Ação Recomendada: {action}")
 
     return AnalysisResponse(riskScore=fraud_probability, recommendedAction=action)
 

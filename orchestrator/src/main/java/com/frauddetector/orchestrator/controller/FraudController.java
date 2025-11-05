@@ -79,6 +79,8 @@ public class FraudController {
                     // Envia o evento de auditoria de forma assíncrona
                     .doOnSuccess(responseMap -> {
                         AuditLogEvent event = new AuditLogEvent(
+                                transaction.userId(),
+                                transaction.value(),
                                 (String) responseMap.get("status"),
                                 (AnalysisResponseDTO) responseMap.get("riskAnalysis")
                         );

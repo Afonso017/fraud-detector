@@ -1,4 +1,4 @@
-package com.frauddetector.orchestrator.dto;
+package com.frauddetector.profile.dto;
 
 public record AuditLogEvent(
     String userId,

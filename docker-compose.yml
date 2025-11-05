@@ -36,13 +36,14 @@ services:
     ports:
       - "8082:8082"
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://db-profile:5432/${DB_PROFILE_NAME}
-      - SPRING_DATASOURCE_USERNAME=${DB_PROFILE_USER}
-      - SPRING_DATASOURCE_PASSWORD=${DB_PROFILE_PASSWORD}
-      - SPRING_DATASOURCE_DRIVER_CLASS_NAME=org.postgresql.Driver
+      - SPRING_DATA_REDIS_HOST=redis-profile
+      - SPRING_DATA_REDIS_PORT=6379
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
     depends_on:
-      db-profile:
+      redis-profile:
         condition: service_healthy
+      kafka:
+        condition: service_started
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8082/actuator/health" ]
       interval: 30s
@@ -101,23 +102,21 @@ services:
     volumes:
       - kafka-data:/bitnami/kafka
 
-  db-profile:
-    image: postgres:15-alpine
-    container_name: db-profile
-    environment:
-      POSTGRES_USER: ${DB_PROFILE_USER}
-      POSTGRES_PASSWORD: ${DB_PROFILE_PASSWORD}
-      POSTGRES_DB: ${DB_PROFILE_NAME}
+  # Banco de dados Redis para o serviço de perfil
+  redis-profile:
+    image: redis:7-alpine
+    container_name: redis-profile
     ports:
-      - "5432:5432"
+      - "6379:6379"
     volumes:
-      - db-profile-data:/var/lib/postgresql/data
+      - redis-profile-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_PROFILE_USER} -d ${DB_PROFILE_NAME}"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
 
+  # Banco de dados Postgres para o serviço de auditoria
   db-audit:
     image: postgres:15-alpine
     container_name: db-audit
@@ -136,6 +135,6 @@ services:
       retries: 5
 
 volumes:
-  db-profile-data:
+  redis-profile-data:
   db-audit-data:
   kafka-data:

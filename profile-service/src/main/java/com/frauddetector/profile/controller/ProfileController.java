@@ -26,9 +26,26 @@ public class ProfileController {
     public ResponseEntity<UserProfile> getUserProfile(@PathVariable String userId) {
         logger.info(">>> Buscando perfil no DB para o usuário: {}", userId);
 
-        // Busca o perfil no banco de dados pelo ID
-        return userProfileRepository.findById(userId)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+        // Tenta encontrar o usuário no banco pelo ID
+        UserProfile profile = userProfileRepository.findById(userId)
+                .orElseGet(() -> createDefaultProfile(userId));
+
+        // Retorna o perfil encontrado ou o padrão
+        return ResponseEntity.ok(profile);
+    }
+
+    /**
+     * Cria um objeto UserProfile padrão em memória para um novo usuário.
+     * Não salva no banco de dados, mantendo a operação rápida.
+     */
+    private UserProfile createDefaultProfile(String userId) {
+        logger.info(">>> Histórico de usuário não encontrado. Criando perfil padrão para {}", userId);
+        UserProfile defaultProfile = new UserProfile();
+        defaultProfile.setUserId(userId);
+        defaultProfile.setTransactionCount(0);              // Novo usuário tem 0 transações
+        defaultProfile.setAverageAmount(0.0);               // Novo usuário tem 0 gasto médio
+        defaultProfile.setLastTransactionCountry("N/A");    // País desconhecido
+
+        return defaultProfile;
     }
 }

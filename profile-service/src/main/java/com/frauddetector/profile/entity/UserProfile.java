@@ -1,12 +1,12 @@
 package com.frauddetector.profile.entity;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.redis.core.RedisHash;
 
-@Entity
-@Table(name = "user_profiles")
-public class UserProfile {
+import java.io.Serializable;
+
+@RedisHash("UserProfile")
+public class UserProfile implements Serializable {
 
     @Id
     private String userId;
