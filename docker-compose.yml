@@ -15,6 +15,7 @@ services:
     container_name: orchestrator
     ports:
       - "8081:8081"
+      - "5005:5005"
     environment:
       - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
     depends_on:
@@ -35,6 +36,7 @@ services:
     container_name: profile-service
     ports:
       - "8082:8082"
+      - "5006:5005"
     environment:
       - SPRING_DATA_REDIS_HOST=redis-profile
       - SPRING_DATA_REDIS_PORT=6379
@@ -55,6 +57,7 @@ services:
     container_name: inference-service
     ports:
       - "8083:8083"
+      - "5678:5678"
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8083/health" ]
       interval: 30s
@@ -66,6 +69,7 @@ services:
     container_name: audit-service
     ports:
       - "8084:8084"
+      - "5007:5005"
     environment:
       - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - SPRING_DATASOURCE_URL=jdbc:postgresql://db-audit:5432/${DB_AUDIT_NAME}

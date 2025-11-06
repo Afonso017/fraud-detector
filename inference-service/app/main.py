@@ -3,7 +3,14 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 import numpy as np
+import debugpy
 
+
+try:
+    debugpy.listen(("0.0.0.0", 5678))
+    logging.info(">>> Servidor de debug do Python escutando na porta 5678")
+except Exception as e:
+    logging.info(f"Erro ao iniciar o debugger: {e}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
