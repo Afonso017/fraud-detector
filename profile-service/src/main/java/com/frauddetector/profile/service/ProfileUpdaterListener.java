@@ -22,22 +22,29 @@ public class ProfileUpdaterListener {
     // Escuta o mesmo tópico que o orchestrator publica
     @KafkaListener(topics = "fraud_analysis_events", groupId = "profile_updater_group")
     public void handleProfileUpdate(AuditLogEvent event) {
+        if (event.value() == null || event.value() <= 0) {
+            logger.info("<<< Evento com valor negativo recebido. Ignorando para cálculo de média.");
+            return;
+        }
+
         logger.info("<<< Evento de transação recebido para: {}", event.userId());
 
         // Busca o perfil atual
         UserProfile profile = repository.findById(event.userId())
                 .orElseGet(() -> createDefaultProfile(event.userId()));
 
-        // Atualiza o perfil com base na transação
-        int count = profile.getTransactionCount();
-        double newAverage = ((profile.getAverageAmount() * count) + event.value()) / (count - 1);
+        logger.info("<<< Perfil atual carregado para: {}", event.userId());
 
-        profile.setTransactionCount(count);
+        // Atualiza o perfil com base na transação
+        int newCount = profile.getTransactionCount() + 1;
+        double newAverage = ((profile.getAverageAmount() * profile.getTransactionCount()) + event.value()) / newCount;
+
+        profile.setTransactionCount(newCount);
         profile.setAverageAmount(newAverage);
 
         // Salva o perfil atualizado de volta no Redis
         repository.save(profile);
-        logger.info("<<< Perfil atualizado e salvo para: {}", event.userId());
+        logger.info("<<< Perfil atualizado e salvo no banco: {}", profile);
     }
 
     /**

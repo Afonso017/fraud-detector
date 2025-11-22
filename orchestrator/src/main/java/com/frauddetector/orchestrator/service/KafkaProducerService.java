@@ -21,6 +21,6 @@ public class KafkaProducerService {
     public void sendAuditEvent(AuditLogEvent event) {
         // Envia a mensagem de forma assíncrona
         kafkaTemplate.send(TOPIC, event);
-        logger.info(">>> Evento de auditoria enviado para o Kafka: {}", event);
+        //logger.info(">>> Evento de auditoria enviado para o Kafka: {}", event);
     }
 }

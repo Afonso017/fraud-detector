@@ -24,7 +24,7 @@ public class ProfileController {
 
     @GetMapping("/{userId}")
     public ResponseEntity<UserProfile> getUserProfile(@PathVariable String userId) {
-        logger.info(">>> Buscando perfil no DB para o usuário: {}", userId);
+        //logger.info(">>> Buscando perfil no DB para o usuário: {}", userId);
 
         // Tenta encontrar o usuário no banco pelo ID
         UserProfile profile = userProfileRepository.findById(userId)
@@ -39,7 +39,7 @@ public class ProfileController {
      * Não salva no banco de dados, mantendo a operação rápida.
      */
     private UserProfile createDefaultProfile(String userId) {
-        logger.info(">>> Histórico de usuário não encontrado. Criando perfil padrão para {}", userId);
+        //logger.info(">>> Histórico de usuário não encontrado. Criando perfil padrão para {}", userId);
         UserProfile defaultProfile = new UserProfile();
         defaultProfile.setUserId(userId);
         defaultProfile.setTransactionCount(0);              // Novo usuário tem 0 transações

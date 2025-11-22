@@ -1,34 +1,31 @@
-import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
+import xgboost as xgb
 import numpy as np
-import debugpy
-
-
-try:
-    debugpy.listen(("0.0.0.0", 5678))
-    logging.info(">>> Servidor de debug do Python escutando na porta 5678")
-except Exception as e:
-    logging.info(f"Erro ao iniciar o debugger: {e}")
+import pandas as pd
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     get_model()
-    logging.info(">>> Aplicação iniciada e pronta para receber requisições")
+    print(">>> Aplicação iniciada e pronta para receber requisições")
     yield
 
 
 app = FastAPI(lifespan=lifespan)
-model = None
+MODEL_FILE = "model.xgb"
+model = xgb.XGBClassifier()
+
 
 # Esta função simula o carregamento de um modelo treinado
 def get_model():
     global model
-    if model is None:
-        # Sempre retorna uma probabilidade fixa ou baseada em regras simples
-        logging.info(">>> Modelo de ML não encontrado. Carregando um simulador.")
-        model = "SIMULATOR"
+    try:
+        model.load_model(MODEL_FILE)
+        print(">>> Modelo de ML carregado com sucesso.")
+    except Exception as e:
+        print(f">>> Erro ao carregar o modelo. Usando um simulador... \n{e}")
+        model = None
     return model
 
 
@@ -43,6 +40,28 @@ class AnalysisRequest(BaseModel):
 class AnalysisResponse(BaseModel):
     risk_score: float = Field(..., alias='riskScore')
     recommended_action: str = Field(..., alias='recommendedAction')
+
+
+def preprocess(request: AnalysisRequest) -> pd.DataFrame:
+    """
+    Transforma a requisição JSON em um DataFrame Pandas.
+    """
+    clean_average_amount = max(0.0, request.average_amount)
+    clean_value = abs(request.value)
+
+    # Cria um dicionário com os dados
+    data = {
+        'value': [clean_value],
+        'transaction_count': [request.transaction_count],
+        'average_amount': [clean_average_amount],
+        # Codifica o país: 0 para BRA, 1 para qualquer outro
+        'is_foreign_country': [0 if request.last_transaction_country == "BRA" else 1]
+    }
+
+    # Define a ordem exata das colunas que o modelo espera
+    FEATURES = ['value', 'transaction_count', 'average_amount', 'is_foreign_country']
+
+    return pd.DataFrame(data, columns=FEATURES)
 
 
 # Função que simula a predição do modelo de ML, por enquanto, usada apenas para testes
@@ -81,8 +100,8 @@ def get_cost_sensitive_action(probability_of_fraud: float, transaction_value: fl
     O objetivo é tomar decisões que minimizam o custo financeiro.
     """
     # Custo de um falso positivo: bloquear uma transação legítima
-    # Este é um valor de negócio, é fixo em 2 unidades monetárias
-    COST_FP = 2.0
+    # Este é um valor de negócio
+    COST_FP = 200.0
 
     # Custo de um falso negativo: deixar uma fraude passar
     # É o valor total da transação
@@ -97,31 +116,57 @@ def get_cost_sensitive_action(probability_of_fraud: float, transaction_value: fl
 
     # Definimos um segundo limite mais agressivo para recusa direta
     decline_threshold = 0.90 # Limite fixo para transações de altíssimo risco
+    safe_threshold = 0.15    # Limite fixo para transações de baixo risco
 
-    logging.info(f">>> Valor da Transação: R${transaction_value:.2f}, Limite de Risco Mínimo: {threshold:.4f}")
+    print(f">>> Valor da Transação: R${transaction_value:.2f}, Limite de Risco Mínimo: {threshold:.4f}, "
+          f"Probabilidade de Fraude: {probability_of_fraud:.4f}")
 
     if probability_of_fraud > decline_threshold:
         return "DECLINE"
+
+    if probability_of_fraud < safe_threshold:
+        return "APPROVE"
+
     if probability_of_fraud > threshold:
         return "REVIEW" # Precisa de análise humana
 
     return "APPROVE"
 
+
 @app.post("/predict", response_model=AnalysisResponse)
 def predict_fraud(request: AnalysisRequest):
-    logging.info(f">>> Análise de risco solicitada para: {request.model_dump(by_alias=True)}")
+    print(f">>> Análise de risco solicitada para: {request.model_dump(by_alias=True)}")
 
-    ml_model = get_model()
+    global model
+    if model is None:
+        return {"error": "Modelo não carregado"}, 500 # Fallback de erro
 
-    # Obtém a probabilidade de fraude do modelo de ML
-    fraud_probability = predict_proba_with_simulator(request)
+    # Pré-processar os dados da requisição
+    features_df = preprocess(request)
 
-    # Usa a teoria do Bayes Minimum Risk para decidir a ação
+    # Obter a probabilidade de fraude do modelo de ML
+    # model.predict_proba() retorna [[prob_classe_0, prob_classe_1]]
+    try:
+        fraud_probability = float(model.predict_proba(features_df)[0][1])
+    except Exception as e:
+        print(f"Erro ao predizer: {e}")
+        fraud_probability = 0.0 # Define um score seguro em caso de erro
+
+    # Se o usuário tem histórico e o valor é consistente, mais ou menos 20% da média,
+    # a chance de fraude é mínima.
+    if request.transaction_count >= 1 and request.average_amount > 0:
+        ratio = request.value / request.average_amount
+
+        if 0.8 <= ratio <= 1.2:
+            fraud_probability = fraud_probability * 0.5
+
+    # Usar a teoria do Bayes Minimum Risk para decidir a ação
     action = get_cost_sensitive_action(fraud_probability, request.value)
 
-    logging.info(f">>> Score de Probabilidade: {fraud_probability:.4f}, Ação Recomendada: {action}")
+    print(f">>> Score de Probabilidade (XGBoost): {fraud_probability:.4f}, Ação Recomendada: {action}")
 
     return AnalysisResponse(riskScore=fraud_probability, recommendedAction=action)
+
 
 @app.get("/health")
 def health_check():

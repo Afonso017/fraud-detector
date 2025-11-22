@@ -4,4 +4,6 @@ uvicorn[standard]
 pydantic
 scikit-learn
 xgboost
+pandas
+numpy
 debugpy
