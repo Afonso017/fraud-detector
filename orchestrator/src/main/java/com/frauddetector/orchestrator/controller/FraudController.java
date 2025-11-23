@@ -34,7 +34,7 @@ public class FraudController {
 
     @PostMapping
     public Mono<Map<String, Object>> analyzeFraud(@RequestBody(required = false) TransactionDTO transaction) {
-        //logger.info(">>> Requisição recebida: {}", transaction);
+        logger.info(">>> Requisição recebida: {}", transaction);
 
         // Chama o serviço de perfil
         return this.profileWebClient.get()
@@ -42,7 +42,7 @@ public class FraudController {
             .retrieve()
             .bodyToMono(UserProfileDTO.class)
             .flatMap(userProfile -> {
-                //logger.info(">>> Perfil recebido: {}", userProfile);
+                logger.info(">>> Perfil recebido: {}", userProfile);
 
                 // Prepara o corpo da requisição para o serviço de inferência
                 AnalysisRequestDTO analysisRequest = new AnalysisRequestDTO(
@@ -50,7 +50,8 @@ public class FraudController {
                     transaction.value(),
                     userProfile.transactionCount(),
                     userProfile.averageAmount(),
-                    userProfile.lastTransactionCountry()
+                    userProfile.lastTransactionCountry(),
+                    transaction.country()
                 );
 
                 // Chama o serviço de inferência com os dados enriquecidos
@@ -60,15 +61,15 @@ public class FraudController {
                     .retrieve()
                     .bodyToMono(AnalysisResponseDTO.class)
                     .map(analysisResponse -> {
-                        //logger.info(">>> Inferência recebida: {}", analysisResponse);
-//                        String action;
-//                        switch (analysisResponse.recommendedAction()) {
-//                            case "APPROVE" -> action = "Transação aprovada.";
-//                            case "DECLINE" -> action = "Transação rejeitada.";
-//                            case "REVIEW" -> action = "Transação em revisão.";
-//                            default -> action = "Ação desconhecida.";
-//                        }
-                        //logger.info(">>> Resultado: {}", action);
+                        logger.info(">>> Inferência recebida: {}", analysisResponse);
+                        String action;
+                        switch (analysisResponse.recommendedAction()) {
+                            case "APPROVE" -> action = "Transação aprovada.";
+                            case "DECLINE" -> action = "Transação rejeitada.";
+                            case "REVIEW" -> action = "Transação em revisão.";
+                            default -> action = "Ação desconhecida.";
+                        }
+                        logger.info(">>> Resultado: {}", action);
 
                         // Monta e retorna a resposta final
                         return Map.of(
@@ -81,6 +82,7 @@ public class FraudController {
                         AuditLogEvent event = new AuditLogEvent(
                                 transaction.userId(),
                                 transaction.value(),
+                                transaction.country(),
                                 (String) responseMap.get("status"),
                                 (AnalysisResponseDTO) responseMap.get("riskAnalysis")
                         );

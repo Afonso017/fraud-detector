@@ -4,7 +4,8 @@ import org.springframework.lang.NonNull;
 
 public record TransactionDTO(
         String userId,
-        Double value
+        Double value,
+        String country
 ) {
     @NonNull
     @Override
@@ -12,6 +13,7 @@ public record TransactionDTO(
         return "TransactionDTO{" +
                 "userId='" + userId + '\'' +
                 ", value=" + value +
+                ", country='" + country + '\'' +
                 '}';
     }
 }

@@ -7,7 +7,8 @@ public record AnalysisRequestDTO(
         Double value,
         int transactionCount,
         double averageAmount,
-        String lastTransactionCountry
+        String lastTransactionCountry,
+        String currentTransactionCountry
 ) {
     @NonNull
     @Override
@@ -18,6 +19,7 @@ public record AnalysisRequestDTO(
                 ", transactionCount=" + transactionCount +
                 ", averageAmount=" + averageAmount +
                 ", lastTransactionCountry='" + lastTransactionCountry + '\'' +
+                ", currentTransactionCountry='" + currentTransactionCountry + '\'' +
                 '}';
     }
 }

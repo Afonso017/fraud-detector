@@ -36,6 +36,7 @@ class AnalysisRequest(BaseModel):
     transaction_count: int = Field(..., alias='transactionCount')
     average_amount: float = Field(..., alias='averageAmount')
     last_transaction_country: str = Field(..., alias='lastTransactionCountry')
+    transaction_country: str = Field(..., alias='currentTransactionCountry')
 
 class AnalysisResponse(BaseModel):
     risk_score: float = Field(..., alias='riskScore')
@@ -49,13 +50,16 @@ def preprocess(request: AnalysisRequest) -> pd.DataFrame:
     clean_average_amount = max(0.0, request.average_amount)
     clean_value = abs(request.value)
 
+    # 'is_foreign_country' é calculado baseado no país atual da transação
+    # Se for diferente de "BRA", considera internacional (risco maior)
+    is_foreign = 0 if request.transaction_country == "BRA" else 1
+
     # Cria um dicionário com os dados
     data = {
         'value': [clean_value],
         'transaction_count': [request.transaction_count],
         'average_amount': [clean_average_amount],
-        # Codifica o país: 0 para BRA, 1 para qualquer outro
-        'is_foreign_country': [0 if request.last_transaction_country == "BRA" else 1]
+        'is_foreign_country': [is_foreign]
     }
 
     # Define a ordem exata das colunas que o modelo espera

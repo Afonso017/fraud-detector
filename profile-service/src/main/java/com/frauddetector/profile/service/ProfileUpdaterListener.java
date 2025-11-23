@@ -42,6 +42,10 @@ public class ProfileUpdaterListener {
         profile.setTransactionCount(newCount);
         profile.setAverageAmount(newAverage);
 
+        if (event.country() != null) {
+            profile.setLastTransactionCountry(event.country());
+        }
+
         // Salva o perfil atualizado de volta no Redis
         repository.save(profile);
         logger.info("<<< Perfil atualizado e salvo no banco: {}", profile);
