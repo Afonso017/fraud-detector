@@ -2,7 +2,6 @@ package com.frauddetector.profile.service;
 
 import com.frauddetector.profile.dto.AuditLogEvent;
 import com.frauddetector.profile.entity.UserProfile;
-import com.frauddetector.profile.repository.UserProfileRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -13,10 +12,10 @@ public class ProfileUpdaterListener {
 
     private final Logger logger = LoggerFactory.getLogger(ProfileUpdaterListener.class);
 
-    private final UserProfileRepository repository;
+    private final UserProfileService profileService;
 
-    public ProfileUpdaterListener(UserProfileRepository repository) {
-        this.repository = repository;
+    public ProfileUpdaterListener(UserProfileService profileService) {
+        this.profileService = profileService;
     }
 
     // Escuta o mesmo tópico que o orchestrator publica
@@ -30,8 +29,7 @@ public class ProfileUpdaterListener {
         logger.info("<<< Evento de transação recebido para: {}", event.userId());
 
         // Busca o perfil atual
-        UserProfile profile = repository.findById(event.userId())
-                .orElseGet(() -> createDefaultProfile(event.userId()));
+        UserProfile profile = profileService.getProfile(event.userId());
 
         logger.info("<<< Perfil atual carregado para: {}", event.userId());
 
@@ -47,19 +45,7 @@ public class ProfileUpdaterListener {
         }
 
         // Salva o perfil atualizado de volta no Redis
-        repository.save(profile);
+        profileService.saveProfile(profile);
         logger.info("<<< Perfil atualizado e salvo no banco: {}", profile);
-    }
-
-    /**
-     * Cria um objeto UserProfile padrão em memória para um novo usuário.
-     */
-    private UserProfile createDefaultProfile(String userId) {
-        UserProfile defaultProfile = new UserProfile();
-        defaultProfile.setUserId(userId);
-        defaultProfile.setTransactionCount(0);
-        defaultProfile.setAverageAmount(0.0);
-        defaultProfile.setLastTransactionCountry("N/A");
-        return defaultProfile;
     }
 }
