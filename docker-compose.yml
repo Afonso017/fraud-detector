@@ -2,6 +2,9 @@ services:
   api-gateway:
     build: ./api-gateway
     container_name: api-gateway
+    depends_on:
+      orchestrator-1:
+        condition: service_healthy
     ports:
       - "8080:8080"
     healthcheck:
@@ -10,15 +13,17 @@ services:
       timeout: 10s
       retries: 3
 
-  orchestrator:
+  # Orquestrador base
+  orchestrator-1: &orchestrator-base
     build: ./orchestrator
-    container_name: orchestrator
+    container_name: orchestrator-1
+    hostname: orchestrator-1
     environment:
       - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
     depends_on:
-      profile-service:
+      profile-service-1:
         condition: service_healthy
-      inference-service:
+      inference-service-1:
         condition: service_healthy
       kafka:
         condition: service_started
@@ -28,9 +33,23 @@ services:
       timeout: 10s
       retries: 3
 
-  profile-service:
+  # Réplica 2 do orquestrador
+  orchestrator-2:
+    <<: *orchestrator-base
+    container_name: orchestrator-2
+    hostname: orchestrator-2
+
+  # Réplica 3 do orquestrador
+  orchestrator-3:
+    <<: *orchestrator-base
+    container_name: orchestrator-3
+    hostname: orchestrator-3
+
+  # Serviço de perfil base
+  profile-service-1: &profile-service-base
     build: ./profile-service
-    container_name: profile-service
+    container_name: profile-service-1
+    hostname: profile-service-1
     environment:
       - SPRING_DATA_REDIS_HOST=redis-profile
       - SPRING_DATA_REDIS_PORT=6379
@@ -46,14 +65,51 @@ services:
       timeout: 10s
       retries: 3
 
-  inference-service:
+  # Réplica 2 do serviço de perfil
+  profile-service-2:
+    <<: *profile-service-base
+    container_name: profile-service-2
+    hostname: profile-service-2
+    depends_on:
+      redis-profile:
+          condition: service_healthy
+      kafka:
+          condition: service_started
+
+  # Réplica 3 do serviço de perfil
+  profile-service-3:
+    <<: *profile-service-base
+    container_name: profile-service-3
+    hostname: profile-service-3
+    depends_on:
+      redis-profile:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+
+  # Serviço de inferência base
+  inference-service-1: &inference-service-base
     build: ./inference-service
-    container_name: inference-service
+    container_name: inference-service-1
+    hostname: inference-service-1
+    ports:
+      - "50051"
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8083/health" ]
+      # Usa um script Python de uma linha para tentar conectar na porta 50051 (localhost)
+      test: [ "CMD", "python3", "-c", "import socket; s = socket.socket(socket.AF_INET, socket.SOCK_STREAM); s.connect(('127.0.0.1', 50051)); s.close()" ]
       interval: 30s
       timeout: 10s
       retries: 3
+
+  inference-service-2:
+    <<: *inference-service-base
+    container_name: inference-service-2
+    hostname: inference-service-2
+
+  inference-service-3:
+    <<: *inference-service-base
+    container_name: inference-service-3
+    hostname: inference-service-3
 
   audit-service:
     build: ./audit-service

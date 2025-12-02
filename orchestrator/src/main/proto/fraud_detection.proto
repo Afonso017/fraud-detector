@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package fraud_detection;
+
+// Definição do serviço
+service FraudDetectionService {
+  // RPC para prever fraude
+  rpc PredictFraud (AnalysisRequest) returns (AnalysisResponse);
+}
+
+// Mensagem de entrada (equivalente ao AnalysisRequestDTO)
+message AnalysisRequest {
+  string user_id = 1;
+  double value = 2;
+  int32 transaction_count = 3;
+  double average_amount = 4;
+  string last_transaction_country = 5;
+  string current_transaction_country = 6;
+}
+
+// Mensagem de saída (equivalente ao AnalysisResponseDTO)
+message AnalysisResponse {
+  double risk_score = 1;
+  string recommended_action = 2;
+}

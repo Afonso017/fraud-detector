@@ -7,6 +7,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 
+/**
+ * Ouvinte que atualiza o perfil do usuário com base nos eventos de transação recebidos.
+ */
 @Service
 public class ProfileUpdaterListener {
 
@@ -34,6 +37,7 @@ public class ProfileUpdaterListener {
         logger.info("<<< Perfil atual carregado para: {}", event.userId());
 
         // Atualiza o perfil com base na transação
+        // Incrementa a contagem de transações e recalcula a média ponderada
         int newCount = profile.getTransactionCount() + 1;
         double newAverage = ((profile.getAverageAmount() * profile.getTransactionCount()) + event.value()) / newCount;
 

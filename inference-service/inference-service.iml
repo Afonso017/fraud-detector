@@ -5,6 +5,7 @@
     <content url="file://$MODULE_DIR$">
       <sourceFolder url="file://$MODULE_DIR$/app" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/.venv" />
+      <excludeFolder url="file://$MODULE_DIR$/app/grpc_generated" />
     </content>
     <orderEntry type="jdk" jdkName="Python 3.12 virtualenv at ~/Documents/TCC/fraud-detector/inference-service/.venv" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />

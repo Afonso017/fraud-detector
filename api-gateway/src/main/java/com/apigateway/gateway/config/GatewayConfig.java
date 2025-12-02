@@ -14,7 +14,7 @@ public class GatewayConfig {
             // Rota para o serviço do orquestrador de fraude
             .route("fraud_analysis_route",
                 r -> r.path("/analyze/**")
-                .uri("http://orchestrator:8081"))
+                    .uri("lb://orchestrator-cluster"))
             .build();
     }
 }

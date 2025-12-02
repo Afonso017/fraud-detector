@@ -8,6 +8,9 @@ import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
+/**
+ * Serviço para gerenciar perfis de usuário com caching em RAM e armazenamento em Redis.
+ */
 @Service
 public class UserProfileService {
 
@@ -24,7 +27,7 @@ public class UserProfileService {
      */
     @Cacheable(value = "profiles", key = "#userId")
     public UserProfile getProfile(String userId) {
-        log.info(">>> Cache Miss: A buscar perfil ao Redis para: {}", userId);
+        log.info(">>> Cache Miss: Buscando perfil no Redis para: {}", userId);
         return repository.findById(userId)
                 .orElseGet(() -> createDefaultProfile(userId));
     }
@@ -34,10 +37,13 @@ public class UserProfileService {
      */
     @CachePut(value = "profiles", key = "#profile.getUserId()")
     public UserProfile saveProfile(UserProfile profile) {
-        log.info(">>> Cache Put: A atualizar perfil na RAM e Redis para: {}", profile.getUserId());
+        log.info(">>> Cache Put: Atualizando perfil na RAM e Redis para: {}", profile.getUserId());
         return repository.save(profile);
     }
 
+    /**
+     * Cria um perfil padrão para um novo usuário.
+     */
     private UserProfile createDefaultProfile(String userId) {
         UserProfile defaultProfile = new UserProfile();
         defaultProfile.setUserId(userId);

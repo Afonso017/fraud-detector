@@ -30,6 +30,11 @@ bin/
 .DS_Store
 
 ### Project ###
+!**/target/
 /commands
 /inference-service/.venv/
 /.env
+/inference-service/app/grpc_generated/
+/inference-service/xgboost_model.json
+/api-gateway/target/
+/orchestrator/target/

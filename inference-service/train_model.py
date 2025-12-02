@@ -66,11 +66,10 @@ model = xgb.XGBClassifier(
     learning_rate=0.05,
     objective='binary:logistic',
     eval_metric='logloss',
-    use_label_encoder=False,
     random_state=42
 )
 model.fit(X_train, y_train)
 
-MODEL_FILE = "model.xgb"
+MODEL_FILE = "xgboost_model.json"
 model.save_model(MODEL_FILE)
 print(f"Modelo como '{MODEL_FILE}'")

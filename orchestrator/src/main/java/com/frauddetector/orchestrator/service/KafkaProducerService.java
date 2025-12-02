@@ -6,6 +6,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
+/**
+ * Serviço responsável por enviar eventos de auditoria para o Kafka.
+ */
 @Service
 public class KafkaProducerService {
 
@@ -21,6 +24,6 @@ public class KafkaProducerService {
     public void sendAuditEvent(AuditLogEvent event) {
         // Envia a mensagem de forma assíncrona
         kafkaTemplate.send(TOPIC, event);
-        //logger.info(">>> Evento de auditoria enviado para o Kafka: {}", event);
+        logger.info(">>> Evento de auditoria enviado para o Kafka: {}", event);
     }
 }

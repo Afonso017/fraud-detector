@@ -7,3 +7,5 @@ xgboost
 pandas
 numpy
 debugpy
+grpcio
+grpcio-tools

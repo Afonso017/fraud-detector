@@ -23,7 +23,7 @@ public class AuditConsumer {
 
     @KafkaListener(topics = "fraud_analysis_events", groupId = "audit_group")
     public void consume(AuditLogEvent event) {
-        //log.info("<<< Evento de auditoria recebido: {}", event);
+        log.info("<<< Evento de auditoria recebido: {}", event);
 
         AuditLog auditLog = new AuditLog();
         auditLog.setStatus(event.status());
@@ -32,6 +32,6 @@ public class AuditConsumer {
         auditLog.setTimestamp(Instant.now());
 
         repository.save(auditLog);
-        //log.info("<<< Evento salvo no banco de dados de auditoria.");
+        log.info("<<< Evento salvo no banco de dados de auditoria.");
     }
 }

@@ -3,6 +3,11 @@
   <component name="Black">
     <option name="sdkName" value="Python 3.13 (inference-service)" />
   </component>
+  <component name="EntryPointsManager">
+    <writeAnnotations>
+      <writeAnnotation name="net.devh.boot.grpc.client.inject.GrpcClient" />
+    </writeAnnotations>
+  </component>
   <component name="ExternalStorageConfigurationManager" enabled="true" />
   <component name="MavenProjectsManager">
     <option name="originalFiles">
